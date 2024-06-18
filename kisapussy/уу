@@ -1,0 +1,189 @@
+import sys
+from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QTextEdit, QListWidget, QMessageBox, QDialog, QGroupBox, QRadioButton
+from PyQt5.QtCore import QDateTime, Qt
+
+
+class RepairRequest:
+    def __init__(self, request_id, equipment, issue_type, description, client, status, date_added):
+        self.request_id = request_id
+        self.equipment = equipment
+        self.issue_type = issue_type
+        self.description = description
+        self.client = client
+        self.status = status
+        self.date_added = date_added
+
+
+class Database:
+    def __init__(self):
+        self.repair_requests = []
+        self.next_request_id = 1
+
+    def add_repair_request(self, request):
+        request.request_id = self.next_request_id
+        self.repair_requests.append(request)
+        self.next_request_id += 1
+
+
+class MainWindow(QMainWindow):
+    def __init__(self):
+        super().__init__()
+
+        self.setWindowTitle("Учет заявок на ремонт оборудования")
+        self.setGeometry(100, 100, 800, 600)
+
+        self.central_widget = QWidget()
+        self.setCentralWidget(self.central_widget)
+
+        self.layout = QVBoxLayout()
+        self.central_widget.setLayout(self.layout)
+
+        self.db = Database()
+
+        self.init_ui()
+
+    def init_ui(self):
+        self.label = QLabel("Список заявок на ремонт")
+        self.label.setStyleSheet("font-size: 18px; font-weight: bold;")
+        self.layout.addWidget(self.label)
+
+        self.request_list = QListWidget()
+        self.request_list.setStyleSheet("font-size: 14px;")
+        self.layout.addWidget(self.request_list)
+
+        self.refresh_button = QPushButton("Обновить список")
+        self.refresh_button.setStyleSheet("font-size: 14px;")
+        self.refresh_button.clicked.connect(self.refresh_list)
+        self.layout.addWidget(self.refresh_button)
+
+        self.add_request_button = QPushButton("Добавить заявку")
+        self.add_request_button.setStyleSheet("font-size: 14px;")
+        self.add_request_button.clicked.connect(self.show_add_request_dialog)
+        self.layout.addWidget(self.add_request_button)
+
+        self.edit_request_button = QPushButton("Редактировать заявку")
+        self.edit_request_button.setStyleSheet("font-size: 14px;")
+        self.edit_request_button.clicked.connect(self.show_edit_request_dialog)
+        self.layout.addWidget(self.edit_request_button)
+
+        self.accept_request_button = QPushButton("Принять заявку")
+        self.accept_request_button.setStyleSheet("font-size: 14px;")
+        self.accept_request_button.clicked.connect(self.accept_request)
+        self.layout.addWidget(self.accept_request_button)
+
+        self.reject_request_button = QPushButton("Отклонить заявку")
+        self.reject_request_button.setStyleSheet("font-size: 14px;")
+        self.reject_request_button.clicked.connect(self.reject_request)
+        self.layout.addWidget(self.reject_request_button)
+
+        self.complete_request_button = QPushButton("Выполнено")
+        self.complete_request_button.setStyleSheet("font-size: 14px; background-color: #4CAF50; color: white; border: none; padding: 10px 24px; text-align: center; text-decoration: none; display: inline-block; margin: 4px 2px; cursor: pointer;")
+        self.complete_request_button.clicked.connect(self.complete_request)
+        self.layout.addWidget(self.complete_request_button)
+
+    def refresh_list(self):
+        self.request_list.clear()
+        for request in self.db.repair_requests:
+            self.request_list.addItem(
+                f"Заявка #{request.request_id} - {request.equipment} ({request.status}) - Добавлена: {request.date_added.toString(Qt.DefaultLocaleShortDate)}")
+
+    def show_add_request_dialog(self):
+        dialog = AddRequestDialog(self)
+        if dialog.exec_():
+            request = dialog.get_repair_request()
+            self.db.add_repair_request(request)
+            self.refresh_list()
+
+    def show_edit_request_dialog(self):
+        current_item = self.request_list.currentItem()
+        if current_item is not None:
+            index = self.request_list.row(current_item)
+            request = self.db.repair_requests[index]
+            dialog = EditRequestDialog(self, request)
+            if dialog.exec_():
+                edited_request = dialog.get_repair_request()
+                self.db.repair_requests[index] = edited_request
+                self.refresh_list()
+                QMessageBox.information(self, "Успех", "Заявка успешно отредактирована.", QMessageBox.Ok)
+
+    def accept_request(self):
+        current_item = self.request_list.currentItem()
+        if current_item is not None:
+            index = self.request_list.row(current_item)
+            request = self.db.repair_requests[index]
+            request.status = "в работе"
+            self.refresh_list()
+
+    def reject_request(self):
+        current_item = self.request_list.currentItem()
+        if current_item is not None:
+            index = self.request_list.row(current_item)
+            request = self.db.repair_requests[index]
+            request.status = "отклонено"
+            self.refresh_list()
+
+    def complete_request(self):
+        current_item = self.request_list.currentItem()
+        if current_item is not None:
+            index = self.request_list.row(current_item)
+            request = self.db.repair_requests[index]
+            request.status = "выполнено"
+            self.refresh_list()
+
+
+class AddRequestDialog(QDialog):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.setWindowTitle("Добавить заявку")
+
+        self.layout = QVBoxLayout()
+
+        self.equipment_label = QLabel("Оборудование:")
+        self.equipment_label.setStyleSheet("font-size: 14px;")
+        self.layout.addWidget(self.equipment_label)
+        self.equipment_edit = QLineEdit()
+        self.equipment_edit.setStyleSheet("font-size: 14px;")
+        self.layout.addWidget(self.equipment_edit)
+
+        self.issue_type_label = QLabel("Тип неисправности:")
+        self.issue_type_label.setStyleSheet("font-size: 14px;")
+        self.layout.addWidget(self.issue_type_label)
+        self.issue_type_edit = QLineEdit()
+        self.issue_type_edit.setStyleSheet("font-size: 14px;")
+        self.layout.addWidget(self.issue_type_edit)
+
+        self.description_label = QLabel("Описание проблемы:")
+        self.description_label.setStyleSheet("font-size: 14px;")
+        self.layout.addWidget(self.description_label)
+        self.description_edit = QTextEdit()
+        self.description_edit.setStyleSheet("font-size: 14px;")
+        self.layout.addWidget(self.description_edit)
+
+        self.client_label = QLabel("Клиент:")
+        self.client_label.setStyleSheet("font-size: 14px;")
+        self.layout.addWidget(self.client_label)
+        self.client_edit = QLineEdit()
+        self.client_edit.setStyleSheet("font-size: 14px;")
+        self.layout.addWidget(self.client_edit)
+
+        self.add_button = QPushButton("Добавить")
+        self.add_button.setStyleSheet("font-size: 14px;")
+        self.add_button.clicked.connect(self.accept)
+        self.layout.addWidget(self.add_button)
+
+        self.setLayout(self.layout)
+    def get_repair_request(self):
+        equipment = self.equipment_edit.text()
+        issue_type = self.issue_type_edit.text()
+        description = self.description_edit.toPlainText()
+        client = self.client_edit.text()
+        status = "в ожидании"
+        date_added = QDateTime.currentDateTime()
+        return RepairRequest(None, equipment, issue_type, description, client, status, date_added)
+
+
+if __name__ == "__main__":
+    app = QApplication(sys.argv)
+    window = MainWindow()
+    window.show()
+    sys.exit(app.exec_())
